@@ -9,6 +9,7 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import spacy
+from spacy.cli import download
 
 # =====================================================
 # DOWNLOAD NLTK RESOURCES
@@ -18,9 +19,7 @@ nltk.download('stopwords')
 
 # =====================================================
 # LOAD SPACY MODEL
-# =====================================================
-import spacy
-from spacy.cli import download
+# ====================================================
 
 try:
     nlp = spacy.load("en_core_web_sm")
