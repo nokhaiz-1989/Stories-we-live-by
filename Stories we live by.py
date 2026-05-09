@@ -9,20 +9,18 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import spacy
-from spacy.cli import download
 
 # =====================================================
-# DOWNLOAD NLTK RESOURCES
+# DOWNLOAD NLTK RESOURCES  ← FIX 1: Added missing downloads
 # =====================================================
+nltk.download('stopwords', quiet=True)
+nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)   # needed for newer NLTK versions
 
 # =====================================================
-# LOAD SPACY MODEL
-# ====================================================
-
-import spacy
-
+# LOAD SPACY MODEL  ← FIX 2: Removed duplicate / misindented line
+# =====================================================
 nlp = spacy.load("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
 
 # =====================================================
 # PAGE CONFIG
@@ -236,6 +234,44 @@ if uploaded_file is not None:
     processed_tokens = preprocess_text(all_text)
 
     # =====================================================
+    # PRE-COMPUTE CLASSIFICATION  ← FIX 3: Moved outside tabs
+    # so category_counts is available to both Tab 4 and Tab 5
+    # =====================================================
+    classification_results = []
+
+    for article in df["article_text"].astype(str):
+
+        doc = nlp(article)
+
+        for sent in doc.sents:
+
+            sentence = sent.text.strip()
+
+            categories = classify_sentence(sentence)
+
+            if categories:
+
+                classification_results.append({
+                    "Sentence": sentence,
+                    "Category": ", ".join(categories)
+                })
+
+    # Build category_counts at the top level so Tab 5 can always access it
+    category_counts = Counter()
+
+    if classification_results:
+
+        classification_df = pd.DataFrame(classification_results)
+
+        all_categories = []
+
+        for cats in classification_df["Category"]:
+            split_cats = cats.split(", ")
+            all_categories.extend(split_cats)
+
+        category_counts = Counter(all_categories)
+
+    # =====================================================
     # CREATE TABS
     # =====================================================
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -336,47 +372,17 @@ if uploaded_file is not None:
 
         st.header("Stibbe Category Classification")
 
-        classification_results = []
-
-        for article in df["article_text"].astype(str):
-
-            doc = nlp(article)
-
-            for sent in doc.sents:
-
-                sentence = sent.text.strip()
-
-                categories = classify_sentence(sentence)
-
-                if categories:
-
-                    classification_results.append({
-                        "Sentence": sentence,
-                        "Category": ", ".join(categories)
-                    })
-
         if classification_results:
-
-            classification_df = pd.DataFrame(classification_results)
 
             st.write("### Classified Sentences")
             st.dataframe(classification_df)
 
-            # CATEGORY COUNTS
-            all_categories = []
-
-            for cats in classification_df["Category"]:
-                split_cats = cats.split(", ")
-                all_categories.extend(split_cats)
-
-            category_counts = Counter(all_categories)
-
+            # PIE CHART
             category_df = pd.DataFrame({
                 "Category": list(category_counts.keys()),
                 "Count": list(category_counts.values())
             })
 
-            # PIE CHART
             fig2 = px.pie(
                 category_df,
                 names="Category",
@@ -413,7 +419,8 @@ if uploaded_file is not None:
         inspired by Critical Discourse Analysis and Ecolinguistics.
         """)
 
-        if 'category_counts' in locals():
+        # FIX 4: category_counts is now always defined (may be empty Counter)
+        if category_counts:
 
             if "Metaphor" in category_counts:
                 st.info("""
@@ -444,6 +451,9 @@ if uploaded_file is not None:
                 Ideological patterns reflect underlying assumptions about
                 development, governance, climate, and responsibility.
                 """)
+
+        else:
+            st.warning("No discourse patterns detected in the uploaded dataset.")
 
 else:
 
