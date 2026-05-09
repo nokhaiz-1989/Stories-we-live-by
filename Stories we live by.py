@@ -19,12 +19,15 @@ nltk.download('stopwords')
 # =====================================================
 # LOAD SPACY MODEL
 # =====================================================
+import spacy
+from spacy.cli import download
+
 try:
     nlp = spacy.load("en_core_web_sm")
+
 except:
-    st.error("Please install spaCy model first:")
-    st.code("python -m spacy download en_core_web_sm")
-    st.stop()
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
 # =====================================================
 # PAGE CONFIG
