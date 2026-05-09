@@ -104,7 +104,8 @@ if "article_text" not in df.columns:
     st.error("Dataset must contain an **article_text** column.")
     st.stop()
 
-all_text = " ".join(df["article_text"].astype(str))
+df["article_text"] = df["article_text"].fillna("").astype(str)
+all_text = " ".join(df["article_text"])
 
 # ── preprocessing ─────────────────────────────────────────────────────────────
 with st.spinner("Preprocessing corpus…"):
@@ -113,7 +114,7 @@ with st.spinner("Preprocessing corpus…"):
 # ── Stibbe classification (computed once, used in two tabs) ───────────────────
 rows = []
 with st.spinner("Running Stibbe classification…"):
-    for article in df["article_text"].astype(str):
+    for article in df["article_text"]:
         for sent in nlp(article).sents:
             cats = classify(sent.text.strip())
             if cats:
