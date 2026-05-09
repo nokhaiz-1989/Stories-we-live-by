@@ -14,8 +14,6 @@ from spacy.cli import download
 # =====================================================
 # DOWNLOAD NLTK RESOURCES
 # =====================================================
-nltk.download('punkt')
-nltk.download('stopwords')
 
 # =====================================================
 # LOAD SPACY MODEL
