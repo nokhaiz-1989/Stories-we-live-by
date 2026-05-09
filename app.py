@@ -111,6 +111,11 @@ all_text = " ".join(df["article_text"])
 with st.spinner("Preprocessing corpus…"):
     tokens = preprocess(all_text)
 
+if not tokens:
+    st.error("⚠️ No text could be extracted from the article_text column. "
+             "Please check your CSV — the column may be empty or contain only None/null values.")
+    st.stop()
+
 # ── Stibbe classification (computed once, used in two tabs) ───────────────────
 rows = []
 with st.spinner("Running Stibbe classification…"):
@@ -157,10 +162,13 @@ with tab2:
         use_container_width=True
     )
     st.write("### Word Cloud")
-    wc = WordCloud(width=1000, height=500, background_color="white").generate(" ".join(tokens))
-    fig_wc, ax = plt.subplots(figsize=(12, 6))
-    ax.imshow(wc, interpolation="bilinear"); ax.axis("off")
-    st.pyplot(fig_wc)
+    if tokens:
+        wc = WordCloud(width=1000, height=500, background_color="white").generate(" ".join(tokens))
+        fig_wc, ax = plt.subplots(figsize=(12, 6))
+        ax.imshow(wc, interpolation="bilinear"); ax.axis("off")
+        st.pyplot(fig_wc)
+    else:
+        st.warning("No words found. Check that your article_text column has content.")
 
 # TAB 3
 with tab3:
