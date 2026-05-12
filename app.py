@@ -244,7 +244,7 @@ if input_method == "Upload CSV File":
 elif input_method == "Paste Text Directly":
 
     pasted_text = st.text_area(
-        "Paste your text here (Maximum 10,000 words)",
+        "Paste your text here (Maximum 100,000 words)",
         height=300,
         placeholder="Paste article, discourse, essay, news report, or any text here...",
     )
@@ -255,10 +255,10 @@ elif input_method == "Paste Text Directly":
 
     word_count = count_words(pasted_text)
 
-    if word_count > 10000:
+    if word_count > 100000:
         st.error(
             f"⚠️ Word limit exceeded. Current count: {word_count} words. "
-            "Maximum allowed: 10,000 words."
+            "Maximum allowed: 100,000 words."
         )
         st.stop()
 
