@@ -1,8 +1,11 @@
 import streamlit as st
 
-st.set_page_config(page_title="Eco-CDA Analyzer", layout="wide")
+st.set_page_config(
+    page_title="Eco-CDA Analyzer",
+    layout="wide"
+)
 
-# ── stdlib / third-party imports ──────────────────────────────────────────────
+# ── imports ───────────────────────────────────────────────────────────────────
 import re
 from collections import Counter
 
@@ -12,26 +15,28 @@ import pandas as pd
 import plotly.express as px
 from wordcloud import WordCloud
 
-# ── NLTK data ─────────────────────────────────────────────────────────────────
-for resource in ("stopwords", "punkt"):
-    nltk.download(resource, quiet=True)
+# ── nltk ──────────────────────────────────────────────────────────────────────
+# Only stopwords are needed now
+nltk.download("stopwords", quiet=True)
 
 from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 
 # ── spaCy ─────────────────────────────────────────────────────────────────────
 import spacy
 
 
-@st.cache_resource(show_spinner="Loading language model...")
+@st.cache_resource(show_spinner="Loading spaCy language model...")
 def load_nlp():
-    """Load en_core_web_sm; download on-the-fly if missing."""
+    """Load spaCy model and download if missing."""
     try:
         return spacy.load("en_core_web_sm")
+
     except OSError:
         from spacy.cli import download
 
-        download("en_core_web_sm")
+        with st.spinner("Downloading spaCy model..."):
+            download("en_core_web_sm")
+
         return spacy.load("en_core_web_sm")
 
 
@@ -99,23 +104,25 @@ ERASURE_PATTERNS = [
 
 
 def preprocess(text: str) -> list[str]:
-    """Clean and preprocess text."""
+    """
+    Clean and preprocess text using spaCy only.
+    """
+
     text = re.sub(r"http\S+", "", str(text).lower())
     text = re.sub(r"[^a-z\s]", " ", text)
 
+    doc = nlp(text)
+
     tokens = [
-        w
-        for w in word_tokenize(text)
-        if w not in STOP and len(w.strip()) > 1
-    ]
-
-    doc = nlp(" ".join(tokens))
-
-    return [
         token.lemma_
         for token in doc
-        if token.lemma_.strip() != ""
+        if token.is_alpha
+        and token.text not in STOP
+        and not token.is_stop
+        and len(token.text) > 1
     ]
+
+    return tokens
 
 
 def word_freq(tokens):
@@ -123,19 +130,27 @@ def word_freq(tokens):
 
 
 def concordance(text: str, keyword: str, width: int = 60):
-    """Find concordance lines."""
+    """
+    Generate concordance lines.
+    """
+
     out = []
 
-    for m in re.finditer(re.escape(keyword), text, re.IGNORECASE):
-        s = max(m.start() - width, 0)
-        e = min(m.end() + width, len(text))
-        out.append(text[s:e])
+    for match in re.finditer(re.escape(keyword), text, re.IGNORECASE):
+
+        start = max(match.start() - width, 0)
+        end = min(match.end() + width, len(text))
+
+        out.append(text[start:end])
 
     return out
 
 
 def classify(sentence: str) -> list[str]:
-    """Classify sentence into Stibbe categories."""
+    """
+    Classify sentence into Stibbe categories.
+    """
+
     s = sentence.lower()
     cats = []
 
@@ -186,14 +201,17 @@ st.sidebar.title("📂 Input Options")
 
 input_method = st.sidebar.radio(
     "Choose Input Method",
-    ["Upload CSV File", "Paste Text Directly"],
+    [
+        "Upload CSV File",
+        "Paste Text Directly",
+    ],
 )
 
-# ── DATA INPUT ────────────────────────────────────────────────────────────────
+# ── data input ────────────────────────────────────────────────────────────────
 df = None
 all_text = ""
 
-# OPTION 1 — CSV Upload
+# OPTION 1 ─ CSV
 if input_method == "Upload CSV File":
 
     uploaded_file = st.sidebar.file_uploader(
@@ -202,6 +220,7 @@ if input_method == "Upload CSV File":
     )
 
     if uploaded_file is None:
+
         st.info("Please upload a CSV dataset to begin.")
 
         st.write("### Required CSV Format")
@@ -228,43 +247,64 @@ if input_method == "Upload CSV File":
         st.stop()
 
     if "article_text" not in df.columns:
-        st.error("Dataset must contain an **article_text** column.")
+
+        st.error(
+            "Dataset must contain an **article_text** column."
+        )
+
         st.stop()
 
-    df["article_text"] = df["article_text"].fillna("").astype(str)
+    df["article_text"] = (
+        df["article_text"]
+        .fillna("")
+        .astype(str)
+    )
 
     all_text = " ".join(df["article_text"])
 
     st.success("CSV dataset uploaded successfully!")
 
     st.write("## Dataset Preview")
-    st.dataframe(df.head())
 
-# OPTION 2 — Paste Text
+    st.dataframe(
+        df.head(),
+        use_container_width=True
+    )
+
+# OPTION 2 ─ PASTE TEXT
 elif input_method == "Paste Text Directly":
 
     pasted_text = st.text_area(
-        "Paste your text here (Maximum 100,000 words)",
+        "Paste your text here (Maximum 10,000 words)",
         height=300,
-        placeholder="Paste article, discourse, essay, news report, or any text here...",
+        placeholder=(
+            "Paste article, essay, news report, "
+            "speech, or discourse text here..."
+        ),
     )
 
     if not pasted_text.strip():
+
         st.info("Please paste text to begin analysis.")
         st.stop()
 
     word_count = count_words(pasted_text)
 
-    if word_count > 100000:
+    if word_count > 10000:
+
         st.error(
-            f"⚠️ Word limit exceeded. Current count: {word_count} words. "
-            "Maximum allowed: 100,000 words."
+            f"⚠️ Word limit exceeded.\n\n"
+            f"Current count: {word_count} words\n"
+            f"Maximum allowed: 10,000 words"
         )
+
         st.stop()
 
-    st.success(f"Text received successfully! ({word_count} words)")
+    st.success(
+        f"Text pasted successfully! ({word_count} words)"
+    )
 
-    # Convert pasted text into dataframe
+    # Convert into dataframe
     df = pd.DataFrame(
         {
             "article_text": [pasted_text]
@@ -275,16 +315,19 @@ elif input_method == "Paste Text Directly":
 
 # ── preprocessing ─────────────────────────────────────────────────────────────
 with st.spinner("Preprocessing corpus..."):
+
     tokens = preprocess(all_text)
 
 if not tokens:
+
     st.error(
         "⚠️ No valid text could be extracted. "
-        "Please check your input data."
+        "Please check your input."
     )
+
     st.stop()
 
-# ── sentence classification ───────────────────────────────────────────────────
+# ── Stibbe classification ─────────────────────────────────────────────────────
 rows = []
 
 with st.spinner("Running Stibbe classification..."):
@@ -303,6 +346,7 @@ with st.spinner("Running Stibbe classification..."):
             cats = classify(sentence)
 
             if cats:
+
                 rows.append(
                     {
                         "Sentence": sentence,
@@ -314,6 +358,7 @@ cat_counts = Counter()
 class_df = None
 
 if rows:
+
     class_df = pd.DataFrame(rows)
 
     for c in class_df["Category"]:
@@ -330,7 +375,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
     ]
 )
 
-# ── TAB 1 ─────────────────────────────────────────────────────────────────────
+# ── TAB 1 ─ Corpus Overview ───────────────────────────────────────────────────
 with tab1:
 
     st.header("Corpus Overview")
@@ -342,23 +387,23 @@ with tab1:
     c3.metric("Unique Words", len(set(tokens)))
     c4.metric("Sentences", len(list(nlp(all_text).sents)))
 
-    st.write("### Text Sample")
+    st.write("### Text Preview")
 
     st.text_area(
         "Preview",
-        all_text[:2000],
-        height=200,
+        all_text[:2500],
+        height=250,
         disabled=True,
     )
 
-# ── TAB 2 ─────────────────────────────────────────────────────────────────────
+# ── TAB 2 ─ Frequency Analysis ────────────────────────────────────────────────
 with tab2:
 
     st.header("Frequency Analysis")
 
     freq = word_freq(tokens)
 
-    fdf = pd.DataFrame(
+    freq_df = pd.DataFrame(
         freq.most_common(20),
         columns=["Word", "Frequency"],
     )
@@ -366,13 +411,13 @@ with tab2:
     st.write("### Top 20 Frequent Words")
 
     st.dataframe(
-        fdf,
+        freq_df,
         use_container_width=True,
     )
 
-    # BAR CHART
+    # bar chart
     fig_bar = px.bar(
-        fdf,
+        freq_df,
         x="Word",
         y="Frequency",
         title="Top 20 Frequent Words",
@@ -383,7 +428,7 @@ with tab2:
         use_container_width=True,
     )
 
-    # WORD CLOUD
+    # word cloud
     st.write("### Word Cloud")
 
     wc = WordCloud(
@@ -399,12 +444,14 @@ with tab2:
 
     st.pyplot(fig_wc)
 
-# ── TAB 3 ─────────────────────────────────────────────────────────────────────
+# ── TAB 3 ─ Concordance ───────────────────────────────────────────────────────
 with tab3:
 
     st.header("Concordance Analysis")
 
-    kw = st.text_input("Enter a keyword")
+    kw = st.text_input(
+        "Enter a keyword"
+    )
 
     if kw:
 
@@ -414,16 +461,20 @@ with tab3:
 
         if hits:
 
-            st.success(f"{len(hits)} occurrence(s) found.")
+            st.success(
+                f"{len(hits)} occurrence(s) found."
+            )
 
             for i, line in enumerate(hits[:50], 1):
 
-                st.markdown(f"**{i}.** ...{line}...")
+                st.markdown(
+                    f"**{i}.** ...{line}..."
+                )
 
         else:
             st.warning("No occurrences found.")
 
-# ── TAB 4 ─────────────────────────────────────────────────────────────────────
+# ── TAB 4 ─ Classification ────────────────────────────────────────────────────
 with tab4:
 
     st.header("Stibbe Category Classification")
@@ -437,16 +488,15 @@ with tab4:
             use_container_width=True,
         )
 
-        cdf = pd.DataFrame(
+        chart_df = pd.DataFrame(
             {
                 "Category": list(cat_counts.keys()),
                 "Count": list(cat_counts.values()),
             }
         )
 
-        # PIE CHART
         fig_pie = px.pie(
-            cdf,
+            chart_df,
             names="Category",
             values="Count",
             title="Distribution of Stibbe Categories",
@@ -457,7 +507,6 @@ with tab4:
             use_container_width=True,
         )
 
-        # DOWNLOAD BUTTON
         st.download_button(
             "📥 Download Classification Results",
             data=class_df.to_csv(index=False),
@@ -466,41 +515,49 @@ with tab4:
         )
 
     else:
+
         st.warning("No categories detected.")
 
-# ── TAB 5 ─────────────────────────────────────────────────────────────────────
+# ── TAB 5 ─ CDA Insights ──────────────────────────────────────────────────────
 with tab5:
 
     st.header("CDA Insights")
 
-    st.markdown("### Interpretation of Discourse Patterns")
+    st.markdown(
+        "### Interpretation of Discourse Patterns"
+    )
 
     if cat_counts:
 
         INSIGHTS = {
+
             "Metaphor": (
-                "Flood discourse frequently uses metaphorical framing, "
-                "representing floods as conflict, warfare, or destructive force."
+                "Flood discourse frequently uses "
+                "metaphorical framing, representing "
+                "floods as conflict or warfare."
             ),
 
             "Evaluation": (
-                "Evaluative language indicates emotional and ideological "
-                "positioning within disaster reporting."
+                "Evaluative language indicates "
+                "emotional and ideological positioning "
+                "within disaster reporting."
             ),
 
             "Identity": (
-                "Identity constructions reveal how social actors "
-                "(victims, authorities, communities) are represented."
+                "Identity constructions reveal how "
+                "social actors are represented."
             ),
 
             "Erasure": (
-                "Erasure patterns suggest passive constructions that may "
-                "hide responsibility or agency."
+                "Erasure patterns suggest passive "
+                "constructions that may hide "
+                "responsibility or agency."
             ),
 
             "Ideology": (
-                "Ideological patterns reflect assumptions about development, "
-                "governance, climate, and responsibility."
+                "Ideological patterns reflect "
+                "assumptions about development, "
+                "governance, and responsibility."
             ),
         }
 
@@ -508,11 +565,19 @@ with tab5:
 
             if cat in cat_counts:
 
-                st.info(f"**{cat}:** {msg}")
+                st.info(
+                    f"**{cat}:** {msg}"
+                )
 
     else:
-        st.warning("No discourse patterns detected.")
+
+        st.warning(
+            "No discourse patterns detected."
+        )
 
 # ── footer ────────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.caption("Eco-CDA Analyzer • Streamlit + NLP + Stibbe CDA Framework")
+
+st.caption(
+    "Eco-CDA Analyzer • Streamlit + NLP + Stibbe CDA Framework"
+)
