@@ -152,6 +152,10 @@ def classify(sentence: str) -> list[str]:
     """
 
     s = sentence.lower()
+
+    # tokenize into actual words
+    words = re.findall(r"\b\w+\b", s)
+    
     cats = []
 
     if any(w in s for w in METAPHOR_WORDS):
