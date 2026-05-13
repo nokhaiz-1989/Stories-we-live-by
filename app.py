@@ -23,80 +23,6 @@ import plotly.graph_objects as go
 from textblob import TextBlob
 from wordcloud import WordCloud
 # ─────────────────────────────────────────────────────────────────────────────
-# TAB 8 - STORIES WE LIVE BY
-# ─────────────────────────────────────────────────────────────────────────────
-with tab8:
-
-    st.header("📖 Stories We Live By (Stibbe Framework)")
-
-    st.markdown(
-        """
-This feature analyzes how language constructs “stories” in discourse 
-based on Arran Stibbe’s ecolinguistics framework.
-It identifies hidden narratives shaping how we think about the world.
-        """
-    )
-
-    STORY_PATTERNS = {
-        "Progress Story": [
-            "development", "growth", "modern", "economic", "progress"
-        ],
-
-        "Crisis Story": [
-            "disaster", "catastrophe", "emergency", "crisis", "collapse"
-        ],
-
-        "War Story": [
-            "battle", "fight", "war", "enemy", "combat"
-        ],
-
-        "Apocalypse Story": [
-            "end", "destroy", "extinction", "collapse", "ruin"
-        ],
-
-        "Responsibility Story": [
-            "responsibility", "action", "policy", "sustainability", "protect"
-        ]
-    }
-
-    story_counts = Counter()
-
-    for sent in nlp(all_text).sents:
-
-        s = sent.text.lower()
-
-        for story, keywords in STORY_PATTERNS.items():
-
-            if any(k in s for k in keywords):
-                story_counts[story] += 1
-
-    if story_counts:
-
-        story_df = pd.DataFrame(
-            list(story_counts.items()),
-            columns=["Story Type", "Frequency"]
-        )
-
-        st.dataframe(story_df)
-
-        fig_story = px.bar(
-            story_df,
-            x="Story Type",
-            y="Frequency",
-            title="Stories Constructed in the Corpus"
-        )
-
-        st.plotly_chart(fig_story, use_container_width=True)
-
-        dominant = story_df.sort_values("Frequency", ascending=False).iloc[0]
-
-        st.success(
-            f"Dominant Story: **{dominant['Story Type']}**"
-        )
-
-    else:
-        st.warning("No dominant narrative patterns detected.")
-# ─────────────────────────────────────────────────────────────────────────────
 # NLTK
 # ─────────────────────────────────────────────────────────────────────────────
 nltk.download("stopwords", quiet=True)
@@ -803,5 +729,79 @@ with tab7:
 st.markdown("---")
 
 st.caption(
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 8 - STORIES WE LIVE BY
+# ─────────────────────────────────────────────────────────────────────────────
+with tab8:
+
+    st.header("📖 Stories We Live By (Stibbe Framework)")
+
+    st.markdown(
+        """
+This feature analyzes how language constructs “stories” in discourse 
+based on Arran Stibbe’s ecolinguistics framework.
+It identifies hidden narratives shaping how we think about the world.
+        """
+    )
+
+    STORY_PATTERNS = {
+        "Progress Story": [
+            "development", "growth", "modern", "economic", "progress"
+        ],
+
+        "Crisis Story": [
+            "disaster", "catastrophe", "emergency", "crisis", "collapse"
+        ],
+
+        "War Story": [
+            "battle", "fight", "war", "enemy", "combat"
+        ],
+
+        "Apocalypse Story": [
+            "end", "destroy", "extinction", "collapse", "ruin"
+        ],
+
+        "Responsibility Story": [
+            "responsibility", "action", "policy", "sustainability", "protect"
+        ]
+    }
+
+    story_counts = Counter()
+
+    for sent in nlp(all_text).sents:
+
+        s = sent.text.lower()
+
+        for story, keywords in STORY_PATTERNS.items():
+
+            if any(k in s for k in keywords):
+                story_counts[story] += 1
+
+    if story_counts:
+
+        story_df = pd.DataFrame(
+            list(story_counts.items()),
+            columns=["Story Type", "Frequency"]
+        )
+
+        st.dataframe(story_df)
+
+        fig_story = px.bar(
+            story_df,
+            x="Story Type",
+            y="Frequency",
+            title="Stories Constructed in the Corpus"
+        )
+
+        st.plotly_chart(fig_story, use_container_width=True)
+
+        dominant = story_df.sort_values("Frequency", ascending=False).iloc[0]
+
+        st.success(
+            f"Dominant Story: **{dominant['Story Type']}**"
+        )
+
+    else:
+        st.warning("No dominant narrative patterns detected.")
     "Advanced Eco-CDA Analyzer • Streamlit + NLP + Ecolinguistics"
 )
