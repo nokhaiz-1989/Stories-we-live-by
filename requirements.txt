@@ -7,4 +7,5 @@ nltk
 nltk==3.9.1
 textblob
 numpy
-spacy
+spacy==3.8.14
+en-core-web-sm==3.8.0
