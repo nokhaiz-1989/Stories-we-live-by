@@ -148,29 +148,87 @@ def concordance(text: str, keyword: str, width: int = 60):
 
 def classify(sentence: str) -> list[str]:
     """
-    Classify sentence into Stibbe categories.
+    Improved Stibbe classification using:
+    - spaCy lemmas
+    - exact token matching
+    - contextual phrase matching
     """
 
-    s = sentence.lower()
+    doc = nlp(sentence.lower())
 
-    # tokenize into actual words
-    words = re.findall(r"\b\w+\b", s)
-    
+    # Extract lemmas only
+    words = [
+        token.lemma_.lower()
+        for token in doc
+        if token.is_alpha
+    ]
+
+    s = " ".join(words)
+
     cats = []
 
-    if any(w in s for w in METAPHOR_WORDS):
+    # ── METAPHOR ─────────────────────────────────────────
+    metaphor_patterns = [
+        "battle against",
+        "fight against",
+        "war on",
+        "drown in",
+        "wave of",
+    ]
+
+    # exact word matching
+    metaphor_keywords = [
+        "battle",
+        "fight",
+        "combat",
+        "enemy",
+        "tsunami",
+    ]
+
+    # phrase-based matching
+    if any(p in s for p in metaphor_patterns):
         cats.append("Metaphor")
 
-    if any(w in s for w in EVALUATION_WORDS):
+    # controlled keyword matching
+    elif any(w in words for w in metaphor_keywords):
+
+        # require environmental context
+        climate_context = [
+            "climate",
+            "flood",
+            "disaster",
+            "environment",
+            "crisis",
+        ]
+
+        if any(c in words for c in climate_context):
+            cats.append("Metaphor")
+
+    # ── EVALUATION ───────────────────────────────────────
+    if any(w in words for w in EVALUATION_WORDS):
         cats.append("Evaluation")
 
-    if any(w in s for w in IDENTITY_WORDS):
+    # ── IDENTITY ─────────────────────────────────────────
+    identity_keywords = IDENTITY_WORDS + [
+        "minister",
+        "government",
+        "official",
+        "authority",
+        "community",
+        "citizen",
+    ]
+
+    if any(w in words for w in identity_keywords):
         cats.append("Identity")
 
-    if any(w in s for w in IDEOLOGY_WORDS):
+    # ── IDEOLOGY ─────────────────────────────────────────
+    if any(w in words for w in IDEOLOGY_WORDS):
         cats.append("Ideology")
 
-    if any(p in s for p in ERASURE_PATTERNS):
+    # ── ERASURE ──────────────────────────────────────────
+    original_sentence = sentence.lower()
+
+    if any(p in original_sentence for p in ERASURE_PATTERNS):
         cats.append("Erasure")
 
     return cats
