@@ -6,3 +6,5 @@ wordcloud
 nltk
 nltk==3.9.1
 textblob
+numpy
+spacy
