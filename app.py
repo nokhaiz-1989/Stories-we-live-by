@@ -1,116 +1,80 @@
-# Advanced Eco-CDA Analyzer Project
-
 import streamlit as st
+st.set_page_config(page_title="Advanced Eco-CDA Analyzer", layout="wide")
 
-st.set_page_config(
-    page_title="Advanced Eco-CDA Analyzer",
-    layout="wide"
-)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Imports
-# ─────────────────────────────────────────────────────────────────────────────
 import re
 from collections import Counter
 
-import matplotlib.pyplot as plt
-import nltk
 import pandas as pd
+import matplotlib.pyplot as plt
 import plotly.express as px
-import plotly.graph_objects as go
 from textblob import TextBlob
 from wordcloud import WordCloud
-import spacy
 
-# ─────────────────────────────────────────────────────────────────────────────
-# NLTK
-# ─────────────────────────────────────────────────────────────────────────────
+import nltk
 nltk.download("stopwords", quiet=True)
 nltk.download("punkt", quiet=True)
 
 from nltk.corpus import stopwords
 from nltk.util import ngrams
 
-# ─────────────────────────────────────────────────────────────────────────────
-# spaCy
-# ─────────────────────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner="Loading spaCy model...")
+import spacy
+
+# ─────────────────────────────
+# spaCy FIX (NO DOWNLOAD IN CLOUD)
+# ─────────────────────────────
+@st.cache_resource
 def load_nlp():
-    try:
-        return spacy.load("en_core_web_sm")
-    except OSError:
-        from spacy.cli import download
-        download("en_core_web_sm")
-        return spacy.load("en_core_web_sm")
+    return spacy.load("en_core_web_sm")
 
 nlp = load_nlp()
 
 STOP = set(stopwords.words("english"))
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Dictionaries
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────
+# WORD LISTS
+# ─────────────────────────────
 METAPHOR_WORDS = ["battle", "fight", "combat", "enemy", "tsunami"]
 
-EVALUATION_WORDS = [
-    "devastating", "catastrophic", "severe", "tragic",
-    "dangerous", "massive", "horrific", "destructive"
-]
+EVALUATION_WORDS = ["devastating", "catastrophic", "severe", "tragic",
+                     "dangerous", "massive", "horrific", "destructive"]
 
-IDENTITY_WORDS = [
-    "government", "victims", "families", "citizens",
-    "farmers", "authorities", "communities", "people",
-    "minister", "official", "community", "citizen"
-]
+IDENTITY_WORDS = ["government", "victims", "families", "citizens",
+                   "farmers", "authorities", "communities", "people",
+                   "minister", "official", "community"]
 
-IDEOLOGY_WORDS = [
-    "development", "progress", "responsibility",
-    "policy", "national", "economic", "climate",
-    "sustainability"
-]
+IDEOLOGY_WORDS = ["development", "progress", "responsibility",
+                  "policy", "national", "economic", "climate", "sustainability"]
 
-ERASURE_PATTERNS = [
-    "were displaced", "was destroyed", "were affected",
-    "was damaged", "lost their homes"
-]
+ERASURE_PATTERNS = ["were displaced", "was destroyed", "were affected",
+                     "was damaged", "lost their homes"]
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Helper Functions
-# ─────────────────────────────────────────────────────────────────────────────
-
-def preprocess(text: str):
+# ─────────────────────────────
+# FUNCTIONS
+# ─────────────────────────────
+def preprocess(text):
     text = re.sub(r"http\S+", "", str(text).lower())
     text = re.sub(r"[^a-z\s]", " ", text)
 
     doc = nlp(text)
 
     return [
-        token.lemma_
-        for token in doc
-        if token.is_alpha
-        and token.text not in STOP
-        and not token.is_stop
-        and len(token.text) > 1
+        t.lemma_
+        for t in doc
+        if t.is_alpha and t.text not in STOP and not t.is_stop
     ]
 
 
-def classify(sentence: str):
+def classify(sentence):
     doc = nlp(sentence.lower())
-
-    words = [t.lemma_.lower() for t in doc if t.is_alpha]
+    words = [t.lemma_ for t in doc if t.is_alpha]
 
     cats = []
 
-    metaphor_patterns = ["battle against", "fight against", "war on", "wave of"]
-
-    s = " ".join(words)
-
-    if any(p in s for p in metaphor_patterns):
+    if any(p in sentence.lower() for p in ["battle against", "fight against", "war on"]):
         cats.append("Metaphor")
 
-    elif any(w in words for w in METAPHOR_WORDS):
-        if any(c in words for c in ["climate", "flood", "disaster", "environment", "crisis"]):
-            cats.append("Metaphor")
+    if any(w in words for w in METAPHOR_WORDS):
+        cats.append("Metaphor")
 
     if any(w in words for w in EVALUATION_WORDS):
         cats.append("Evaluation")
@@ -127,38 +91,17 @@ def classify(sentence: str):
     return cats
 
 
-def word_freq(tokens):
-    return Counter(tokens)
-
-
-def concordance(text, keyword, width=60):
-    out = []
-
-    for m in re.finditer(re.escape(keyword), text, re.IGNORECASE):
-        start = max(m.start() - width, 0)
-        end = min(m.end() + width, len(text))
-
-        out.append([
-            text[start:m.start()],
-            text[m.start():m.end()],
-            text[m.end():end]
-        ])
-
-    return out
-
-
-def count_words(text):
-    return len(text.split())
-
-
 def get_sentiment(text):
     p = TextBlob(text).sentiment.polarity
-
     if p > 0.1:
         return "Positive"
     elif p < -0.1:
         return "Negative"
     return "Neutral"
+
+
+def word_freq(tokens):
+    return Counter(tokens)
 
 
 def generate_ngrams(tokens, n=2, top_k=15):
@@ -171,146 +114,166 @@ def generate_ngrams(tokens, n=2, top_k=15):
     )
 
 
-def extract_entities(text):
-    doc = nlp(text)
-
-    ents = [(e.text, e.label_) for e in doc.ents]
-
-    df = pd.DataFrame(ents, columns=["Entity", "Type"])
-
-    if df.empty:
-        return df
-
-    return df.value_counts().reset_index(name="Frequency")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────
 # UI
-# ─────────────────────────────────────────────────────────────────────────────
-
+# ─────────────────────────────
 st.title("🌍 Advanced Eco-CDA Analyzer")
 
-st.subheader("Computational Critical Discourse Analysis Tool based on Stibbe")
-
-st.sidebar.title("📂 Input Options")
-
-input_method = st.sidebar.radio(
-    "Choose Input Method",
-    ["Upload CSV File", "Paste Text Directly"]
-)
+input_method = st.sidebar.radio("Input Method", ["Upload CSV File", "Paste Text"])
 
 df = None
 all_text = ""
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────
 # INPUT
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────
 if input_method == "Upload CSV File":
 
     file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
 
-    if file is None:
-        st.info("Upload CSV file to begin.")
+    if not file:
+        st.info("Upload CSV with 'article_text' column")
         st.stop()
 
     df = pd.read_csv(file)
 
-    all_text = " ".join(df["article_text"].fillna(""))
+    if "article_text" not in df.columns:
+        st.error("Missing article_text column")
+        st.stop()
+
+    all_text = " ".join(df["article_text"].astype(str))
 
 else:
 
-    pasted = st.text_area("Paste text here", height=300)
+    all_text = st.text_area("Paste Text")
 
-    if not pasted.strip():
+    if not all_text:
         st.stop()
 
-    df = pd.DataFrame({"article_text": [pasted]})
-    all_text = pasted
+    df = pd.DataFrame({"article_text": [all_text]})
 
-# ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────
 # PROCESSING
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────
 tokens = preprocess(all_text)
 
 rows = []
 
 for article in df["article_text"]:
-    for sent in nlp(article).sents:
+    doc = nlp(article)
 
+    for sent in doc.sents:
         cats = classify(sent.text)
-        senti = get_sentiment(sent.text)
 
         if cats:
             rows.append({
                 "Sentence": sent.text,
                 "Category": ", ".join(cats),
-                "Sentiment": senti
+                "Sentiment": get_sentiment(sent.text)
             })
 
 class_df = pd.DataFrame(rows)
+
 cat_counts = Counter()
 
-for c in class_df["Category"]:
+for c in class_df.get("Category", []):
     cat_counts.update(c.split(", "))
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TABS
-# ─────────────────────────────────────────────────────────────────────────────
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-    "Corpus",
-    "Frequency",
-    "KWIC",
-    "Classification",
-    "Sentiment",
-    "Entities",
-    "CDA Insights",
-    "Stories We Live By"
+# ─────────────────────────────
+# TABS
+# ─────────────────────────────
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "Corpus", "Frequency", "KWIC",
+    "Classification", "Sentiment",
+    "Entities", "CDA Insights"
 ])
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB 8 - STORIES WE LIVE BY
-# ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────
+# TAB 1
+# ─────────────────────────────
+with tab1:
+    st.header("Corpus Overview")
 
-with tab8:
+    st.metric("Words", len(tokens))
+    st.metric("Unique Words", len(set(tokens)))
 
-    st.header("📖 Stories We Live By")
+    st.text_area("Preview", all_text[:2000], height=200)
 
-    STORY_PATTERNS = {
-        "Progress": ["development", "growth", "progress"],
-        "Crisis": ["disaster", "crisis", "collapse"],
-        "War": ["battle", "fight", "war"],
-        "Apocalypse": ["end", "destroy", "ruin"],
-        "Responsibility": ["policy", "sustainability", "responsibility"]
-    }
+# ─────────────────────────────
+# TAB 2
+# ─────────────────────────────
+with tab2:
+    st.header("Frequency Analysis")
 
-    counts = Counter()
+    freq_df = pd.DataFrame(word_freq(tokens).most_common(20),
+                            columns=["Word", "Frequency"])
 
-    for sent in nlp(all_text).sents:
-        s = sent.text.lower()
+    st.dataframe(freq_df)
 
-        for story, words in STORY_PATTERNS.items():
-            if any(w in s for w in words):
-                counts[story] += 1
+    st.plotly_chart(px.bar(freq_df, x="Word", y="Frequency"))
 
-    if counts:
+    st.write("Word Cloud")
+    wc = WordCloud(width=900, height=400).generate(" ".join(tokens))
+    st.image(wc.to_array())
 
-        df_story = pd.DataFrame(counts.items(),
-                                columns=["Story", "Frequency"])
+    st.write("Bigrams")
+    st.dataframe(generate_ngrams(tokens, 2))
 
-        st.dataframe(df_story)
+    st.write("Trigrams")
+    st.dataframe(generate_ngrams(tokens, 3))
 
-        fig = px.bar(df_story, x="Story", y="Frequency")
-        st.plotly_chart(fig, use_container_width=True)
+# ─────────────────────────────
+# TAB 3
+# ─────────────────────────────
+with tab3:
+    st.header("KWIC")
 
-        st.success(f"Dominant Story: {df_story.iloc[0]['Story']}")
+    kw = st.text_input("Keyword")
 
+    if kw:
+        results = []
+        for m in re.finditer(kw, all_text, re.I):
+            results.append(all_text[max(0, m.start()-40):m.end()+40])
+
+        st.write(results if results else "No matches")
+
+# ─────────────────────────────
+# TAB 4
+# ─────────────────────────────
+with tab4:
+    st.header("Classification")
+
+    st.dataframe(class_df)
+
+# ─────────────────────────────
+# TAB 5
+# ─────────────────────────────
+with tab5:
+    st.header("Sentiment")
+
+    if not class_df.empty:
+        st.dataframe(class_df["Sentiment"].value_counts())
+
+# ─────────────────────────────
+# TAB 6
+# ─────────────────────────────
+with tab6:
+    st.header("Named Entities")
+
+    ents = [(e.text, e.label_) for e in nlp(all_text).ents]
+
+    st.dataframe(pd.DataFrame(ents, columns=["Entity", "Type"]))
+
+# ─────────────────────────────
+# TAB 7
+# ─────────────────────────────
+with tab7:
+    st.header("CDA Insights")
+
+    if cat_counts:
+        for k, v in cat_counts.items():
+            st.write(f"**{k}:** {v}")
     else:
-        st.warning("No patterns found.")
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────────────────────────────────────
-
-st.markdown("---")
-st.caption("Advanced Eco-CDA Analyzer • Streamlit + NLP + Ecolinguistics")
+        st.info("No patterns detected")
