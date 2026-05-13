@@ -1,5 +1,3 @@
-Advanced Eco-Narrative Analyzer Project
-app.py
 import streamlit as st
 
 st.set_page_config(
